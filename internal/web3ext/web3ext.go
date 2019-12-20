@@ -20,7 +20,7 @@ package web3ext
 var Modules = map[string]string{
 	"accounting": AccountingJs,
 	"admin":      AdminJs,
-	"alerts": AlertJs,
+	"alerts":     AlertJs,
 	"chequebook": ChequebookJs,
 	"clique":     CliqueJs,
 	"ethash":     EthashJs,

@@ -1,11 +1,9 @@
 package alerter
 
-
 // PublicAlerterAPI exposes the functionality of Alerter to the RPC client
 type PublicAlerterAPI struct {
 	alerter *Alerter
 }
-
 
 // NewPublicAlerterAPI create a new PublicAlerterAPI.
 func NewPublicAlerterAPI(alerter *Alerter) *PublicAlerterAPI {
@@ -13,7 +11,6 @@ func NewPublicAlerterAPI(alerter *Alerter) *PublicAlerterAPI {
 		alerter: alerter,
 	}
 }
-
 
 // RegisterDestination delegates to Alerter.RegisterDestination
 // Destination should have the following format:

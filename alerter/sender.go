@@ -23,7 +23,6 @@ type Sender interface {
 	Send(subject string, message string) error
 }
 
-
 // HTTPSender is the backend to send notifications through HTTP
 // TODO: allow to customize headers, format and whatnot
 type HTTPSender struct {

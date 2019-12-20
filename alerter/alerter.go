@@ -7,8 +7,8 @@ import (
 
 // EmailConfig holds the configuration necessary to send emails
 type EmailConfig struct {
-	FromEmail         string
-	FromName         string
+	FromEmail    string
+	FromName     string
 	SMTPHost     string
 	SMTPPort     int
 	SMTPUser     string
