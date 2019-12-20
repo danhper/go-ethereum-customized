@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/alerter"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -141,6 +142,9 @@ type Config struct {
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
+
+	// Alerter options
+	Alerter alerter.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config

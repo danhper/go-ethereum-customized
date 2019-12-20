@@ -206,6 +206,15 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBTagsFlag,
 	}
+
+	alerterFlags = []cli.Flag{
+		utils.AlerterEmailFromNameFlag,
+		utils.AlerterEmailFromEmailFlag,
+		utils.AlerterEmailSMTPHostFlag,
+		utils.AlerterEmailSMTPPortFlag,
+		utils.AlerterEmailSMTPUserFlag,
+		utils.AlerterEmailSMTPPasswordFlag,
+	}
 )
 
 func init() {
@@ -253,6 +262,7 @@ func init() {
 	app.Flags = append(app.Flags, debug.DeprecatedFlags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = append(app.Flags, alerterFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		return debug.Setup(ctx)

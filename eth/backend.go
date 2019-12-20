@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/alerter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -38,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/alerter"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -91,6 +91,8 @@ type Ethereum struct {
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
+
+	alerter *alerter.Alerter
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -159,6 +161,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		etherbase:         config.Miner.Etherbase,
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		alerter:           alerter.NewAlerter(&config.Alerter),
 	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -349,9 +352,9 @@ func (s *Ethereum) APIs() []rpc.API {
 			Public:    true,
 		}, {
 			Namespace: "alerts",
-			Version: "0.1",
-			Service: alerter.NewPublicAlerterAPI(),
-			Public: true,
+			Version:   "0.1",
+			Service:   alerter.NewPublicAlerterAPI(s.alerter),
+			Public:    true,
 		},
 	}...)
 }

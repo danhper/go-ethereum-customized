@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/alerter"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -712,6 +713,38 @@ var (
 		Usage: "Password to authorize access to the database",
 		Value: "test",
 	}
+
+	AlerterEmailFromNameFlag = cli.StringFlag{
+		Name: "alerter.email.fromname",
+		Usage: "The name sending the alert",
+		Value: "ETHAlert",
+	}
+	AlerterEmailFromEmailFlag = cli.StringFlag{
+		Name: "alerter.email.fromemail",
+		Usage: "The email sending the alert",
+		Value: "",
+	}
+	AlerterEmailSMTPHostFlag = cli.StringFlag{
+		Name: "alerter.email.smtphost",
+		Usage: "The SMTP host to use when sending the email",
+		Value: "",
+	}
+	AlerterEmailSMTPPortFlag = cli.IntFlag{
+		Name: "alerter.email.smtpport",
+		Usage: "The SMTP port to use when sending the email",
+		Value: 587,
+	}
+	AlerterEmailSMTPUserFlag = cli.StringFlag{
+		Name: "alerter.email.smtpuser",
+		Usage: "The SMTP user to use when sending the email",
+		Value: "",
+	}
+	AlerterEmailSMTPPasswordFlag = cli.StringFlag{
+		Name: "alerter.email.smtppassword",
+		Usage: "The SMTP password to use when sending the email",
+		Value: "",
+	}
+
 	// Tags are part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
 	// For example `host` tag could be used so that we can group all nodes and average a measurement
 	// across all of them, but also so that we can select a specific node and inspect its measurements.
@@ -1409,6 +1442,28 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 }
 
+
+func setAlerter(ctx *cli.Context, cfg *alerter.Config) {
+	if ctx.GlobalIsSet(AlerterEmailFromNameFlag.Name) {
+		cfg.Email.FromName = ctx.String(AlerterEmailFromNameFlag.Name)
+	}
+	if ctx.GlobalIsSet(AlerterEmailFromEmailFlag.Name) {
+		cfg.Email.FromEmail = ctx.String(AlerterEmailFromEmailFlag.Name)
+	}
+	if ctx.GlobalIsSet(AlerterEmailSMTPHostFlag.Name) {
+		cfg.Email.SMTPHost = ctx.String(AlerterEmailSMTPHostFlag.Name)
+	}
+	if ctx.GlobalIsSet(AlerterEmailSMTPPortFlag.Name) {
+		cfg.Email.SMTPPort = ctx.Int(AlerterEmailSMTPPortFlag.Name)
+	}
+	if ctx.GlobalIsSet(AlerterEmailSMTPUserFlag.Name) {
+		cfg.Email.SMTPUser = ctx.String(AlerterEmailSMTPUserFlag.Name)
+	}
+	if ctx.GlobalIsSet(AlerterEmailSMTPPasswordFlag.Name) {
+		cfg.Email.SMTPPassword = ctx.String(AlerterEmailSMTPPasswordFlag.Name)
+	}
+}
+
 func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
 	whitelist := ctx.GlobalString(WhitelistFlag.Name)
 	if whitelist == "" {
@@ -1506,6 +1561,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
+	setAlerter(ctx, &cfg.Alerter)
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
 

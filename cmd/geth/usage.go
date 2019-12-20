@@ -242,6 +242,10 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: metricsFlags,
 	},
 	{
+		Name:  "ALERTER (EXPERIMENTAL)",
+		Flags: alerterFlags,
+	},
+	{
 		Name:  "WHISPER (EXPERIMENTAL)",
 		Flags: whisperFlags,
 	},

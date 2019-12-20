@@ -1,0 +1,31 @@
+package alerter
+
+
+// PublicAlerterAPI exposes the functionality of Alerter to the RPC client
+type PublicAlerterAPI struct {
+	alerter *Alerter
+}
+
+
+// NewPublicAlerterAPI create a new PublicAlerterAPI.
+func NewPublicAlerterAPI(alerter *Alerter) *PublicAlerterAPI {
+	return &PublicAlerterAPI{
+		alerter: alerter,
+	}
+}
+
+
+// RegisterDestination delegates to Alerter.RegisterDestination
+func (api *PublicAlerterAPI) RegisterDestination(destination string) (bool, error) {
+	return api.alerter.RegisterDestination(destination)
+}
+
+// ListDestinations delegates to Alerter.ListDestinations
+func (api *PublicAlerterAPI) ListDestinations() ([]string, error) {
+	return api.alerter.ListDestinations()
+}
+
+// SendTestAlert delegates to Alerter.SendAlert
+func (api *PublicAlerterAPI) SendTestAlert(subject string, message string) error {
+	return api.alerter.SendAlert(subject, message)
+}

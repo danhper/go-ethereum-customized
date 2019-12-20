@@ -233,6 +233,16 @@ web3._extend({
 			name: 'registerDestination',
 			call: 'alerts_registerDestination',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'listDestinations',
+			call: 'alerts_listDestinations',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'sendTest',
+			call: 'alerts_sendTestAlert',
+			params: 2
 		})
 	]
 })
