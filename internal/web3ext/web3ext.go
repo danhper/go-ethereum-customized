@@ -20,6 +20,7 @@ package web3ext
 var Modules = map[string]string{
 	"accounting": AccountingJs,
 	"admin":      AdminJs,
+	"alerts": AlertJs,
 	"chequebook": ChequebookJs,
 	"clique":     CliqueJs,
 	"ethash":     EthashJs,
@@ -222,6 +223,19 @@ web3._extend({
 		}),
 	]
 });
+`
+
+const AlertJs = `
+web3._extend({
+	property: 'alerts',
+	methods: [
+		new web3._extend.Method({
+			name: 'registerDestination',
+			call: 'alerts_registerDestination',
+			params: 1
+		})
+	]
+})
 `
 
 const DebugJs = `
