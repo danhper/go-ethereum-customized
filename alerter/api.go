@@ -16,6 +16,14 @@ func NewPublicAlerterAPI(alerter *Alerter) *PublicAlerterAPI {
 
 
 // RegisterDestination delegates to Alerter.RegisterDestination
+// Destination should have the following format:
+// transport:endpoint
+// where transport could be 'http' or 'smtp' (note that https urls work with 'http' endpoint)
+// for example
+// http:https://example.com/alert
+// smtp:alert@example.com
+// SMTP configuration must be set through command line options for
+// the STMP transport to work
 func (api *PublicAlerterAPI) RegisterDestination(destination string) (bool, error) {
 	return api.alerter.RegisterDestination(destination)
 }
