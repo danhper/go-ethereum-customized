@@ -1,99 +1,56 @@
 package alerter
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\n' || c == '\t'
-}
-
-func isAlphaNum(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-}
-
-type lexer struct {
-	query string
-	index int
-}
-
-func newLexer(query string) *lexer {
-	return &lexer{
-		query: query,
-		index: 0,
-	}
-}
-
-func (l *lexer) isDone() bool {
-	return l.index >= len(l.query)
-}
-
-// peeks the current char
-func (l *lexer) peek() byte {
-	if l.isDone() {
-		return '\000'
-	}
-	return l.query[l.index]
-}
-
-func (l *lexer) advance() {
-	if !l.isDone() {
-		l.index++
-	}
-}
-
-func (l *lexer) skipWhitespaces() {
-	for isWhitespace(l.peek()) {
-		l.advance()
-	}
-}
-
-func (l *lexer) nextToken() (string, bool) {
-	l.skipWhitespaces()
-	if l.isDone() {
-		return "", false
-	}
-
-	c := l.peek()
-
-	// NOTE: we only have symbols of 1 char for now
-	if !isAlphaNum(c) {
-		l.advance()
-		return string([]byte{c}), true
-	}
-
-	buffer := bytes.NewBufferString("")
-	for isAlphaNum(c) {
-		buffer.WriteByte(c)
-		l.advance()
-		c = l.peek()
-	}
-	return buffer.String(), true
-}
-
 type parser struct {
-	Lexer        *lexer
+	Lexer        *Lexer
 	currentToken string
-	isDone       bool
+	hasNext      bool
 }
 
-func newParser(lexer *lexer) *parser {
+func newParser(lexer *Lexer) *parser {
 	return &parser{
 		Lexer:        lexer,
 		currentToken: "",
-		isDone:       false,
+		hasNext:      true,
 	}
 }
 
-func (p *parser) parseStatement() error {
-	hasNext := false
-	if p.currentToken, hasNext = p.Lexer.nextToken(); hasNext {
-		return fmt.Errorf("empty statement")
+func (p *parser) parseSelect() (*SelectStatement, error) {
+	p.advance()
+	if err := p.eat("select"); err != nil {
+		return nil, err
 	}
-	p.isDone = false
-	return nil
+
+	return nil, nil
+}
+
+// parseSelectList returns the expressions to be selected and
+// a mapping of alias to expression
+func (p *parser) parseSelectList() ([]Expression, map[string]Expression, error) {
+	var expressions []Expression
+	mapping := make(map[string]Expression)
+	expression, err := p.parseExpression()
+	if err != nil {
+		return nil, nil, err
+	}
+	expressions = append(expressions, expression)
+
+	for p.peek() == "," {
+	}
+	return expressions, mapping, nil
+}
+
+func (p *parser) parseExpression() (Expression, error) {
+	return nil, nil
+}
+
+func (p *parser) parseAs() (string, error) {
+	return "", nil
 }
 
 func (p *parser) parseInt() (int64, error) {
@@ -101,17 +58,23 @@ func (p *parser) parseInt() (int64, error) {
 }
 
 func (p *parser) advance() {
-	hasNext := false
-	p.currentToken, hasNext = p.Lexer.nextToken()
-	p.isDone = !hasNext
+	p.currentToken, p.hasNext = p.Lexer.NextToken()
+}
+
+func (p *parser) isDone() bool {
+	return !p.hasNext
 }
 
 func (p *parser) peek() string {
 	return p.currentToken
 }
 
+func (p *parser) peekLower() string {
+	return strings.ToLower(p.currentToken)
+}
+
 func (p *parser) eat(token string) error {
-	if p.peek() != token {
+	if p.peekLower() != strings.ToLower(token) {
 		return fmt.Errorf("expected %s but got %s", token, p.peek())
 	}
 	p.advance()
