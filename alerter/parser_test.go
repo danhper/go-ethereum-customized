@@ -109,3 +109,20 @@ func TestParseExpression(t *testing.T) {
 		assert.True(t, expected.Equals(exp), "%v != %v", expected, exp)
 	}
 }
+
+func TestBasicSelect(t *testing.T) {
+	query := "select sum(msg.value) / 10 as sum, count(tx) from 0x1234abcd"
+	parser, err := NewParser(NewLexer(query))
+	assert.Nil(t, err)
+	stmt, err := parser.ParseSelect()
+	assert.Nil(t, err)
+	assert.Len(t, stmt.Selected, 2)
+	assert.Len(t, stmt.Aliases, 1)
+	firstExp := MustNewBinaryApplication(sumMsgValue, ten, "/")
+	assert.True(t, firstExp.Equals(stmt.Selected[0]), "%v != %v", firstExp, stmt.Selected[0])
+	assert.True(t, firstExp.Equals(stmt.Aliases["sum"]), "%v != %v", firstExp, stmt.Aliases["sum"])
+	secondExp := NewFunctionCall("count", []Expression{NewAttribute([]string{"tx"})})
+	assert.True(t, secondExp.Equals(stmt.Selected[1]), "%v != %v", secondExp, stmt.Selected[1])
+	expectedAddress, _ := big.NewInt(0).SetString("1234abcd", 16)
+	assert.Equal(t, expectedAddress, stmt.From.Address)
+}

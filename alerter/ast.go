@@ -275,7 +275,7 @@ func NewUnaryApplication(operand Expression, rawOperator string) (Expression, er
 	}, nil
 }
 
-// Similar to NewUnaryApplication but panics on failure
+// MustNewUnaryApplication is similar to NewUnaryApplication but panics on failure
 func MustNewUnaryApplication(operand Expression, rawOperator string) Expression {
 	app, err := NewUnaryApplication(operand, rawOperator)
 	if err != nil {
@@ -418,7 +418,7 @@ func (f *FunctionCall) Execute(env *Env) (interface{}, error) {
 // FromClause is a from clause of a statement
 type FromClause struct {
 	// NOTE: can currently only be an address
-	Address string
+	Address *big.Int
 }
 
 // Predicate is a node of the AST which should return a boolean when executed
@@ -448,10 +448,11 @@ type GroupByClause struct {
 // SelectStatement is a full EMQL select statement
 type SelectStatement struct {
 	Selected []Expression
-	From     FromClause
+	From     *FromClause
 	Where    Predicate
 	Limit    LimitClause
 	Since    SinceClause
 	Until    UntilClause
 	GroupBy  GroupByClause
+	Aliases  map[string]Expression
 }

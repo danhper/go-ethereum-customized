@@ -60,14 +60,39 @@ func (p *Parser) ParseSelect() (*SelectStatement, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	selected, aliases, err := p.parseSelectList()
+	if err != nil {
+		return nil, err
+	}
+
+	fromClause, err := p.parseFrom()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SelectStatement{
+		Selected: selected,
+		From:     fromClause,
+		Aliases:  aliases,
+	}, nil
+}
+
+func (p *Parser) parseFrom() (*FromClause, error) {
+	if err := p.eat("from"); err != nil {
+		return nil, err
+	}
+	from, err := p.parseHex()
+	if err != nil {
+		return nil, err
+	}
+	return &FromClause{Address: from}, nil
 }
 
 // parseSelectList returns the expressions to be selected and
 // a mapping of alias to expression
 func (p *Parser) parseSelectList() (expressions []Expression, aliases map[string]Expression, err error) {
 	aliases = make(map[string]Expression)
-	if err = p.parseSelectElem(expressions, aliases); err != nil {
+	if err = p.parseSelectElem(&expressions, aliases); err != nil {
 		return
 	}
 
@@ -75,7 +100,7 @@ func (p *Parser) parseSelectList() (expressions []Expression, aliases map[string
 		if err = p.advance(); err != nil {
 			return
 		}
-		if err = p.parseSelectElem(expressions, aliases); err != nil {
+		if err = p.parseSelectElem(&expressions, aliases); err != nil {
 			return
 		}
 	}
@@ -84,13 +109,13 @@ func (p *Parser) parseSelectList() (expressions []Expression, aliases map[string
 
 // parseSelectElem parses an element from the select list of the form
 // expresion [as alias]
-func (p *Parser) parseSelectElem(expressions []Expression, aliases map[string]Expression) error {
+func (p *Parser) parseSelectElem(expressions *[]Expression, aliases map[string]Expression) error {
 	expression, err := p.parseExpression()
 	if err != nil {
 		return err
 	}
 
-	expressions = append(expressions, expression)
+	*expressions = append(*expressions, expression)
 	alias, err := p.parseAs()
 	if err != nil {
 		return err
@@ -193,11 +218,8 @@ func (p *Parser) parseFactor() (Expression, error) {
 		}
 		return NewStringValue(str), p.advance()
 	} else if strings.HasPrefix(token, "0x") { // base 16 int literal
-		value, success := big.NewInt(0).SetString(token[2:], 16)
-		if !success {
-			return nil, fmt.Errorf("failed to parse int literal %s", token)
-		}
-		return NewIntValue(value), p.advance()
+		value, err := p.parseHex()
+		return NewIntValue(value), err
 	} else if StartsWithDigit(token) { // base 10 literal
 		value, success := big.NewInt(0).SetString(token, 10)
 		if !success {
@@ -218,6 +240,18 @@ func (p *Parser) parseFactor() (Expression, error) {
 		return p.parseAttribute()
 	}
 	return nil, fmt.Errorf("expected factor, got %s", token)
+}
+
+func (p *Parser) parseHex() (*big.Int, error) {
+	token := p.peek()
+	if !strings.HasPrefix(token, "0x") {
+		return nil, fmt.Errorf("expected hex number")
+	}
+	value, success := big.NewInt(0).SetString(token[2:], 16)
+	if !success {
+		return nil, fmt.Errorf("failed to parse int literal %s", token)
+	}
+	return value, p.advance()
 }
 
 func (p *Parser) parseFuncCall() (Expression, error) {
