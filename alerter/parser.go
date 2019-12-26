@@ -70,9 +70,20 @@ func (p *Parser) ParseSelect() (*SelectStatement, error) {
 		return nil, err
 	}
 
+	token := p.peek()
+
+	var predicate Predicate = nil
+	if token == "where" {
+		var err error
+		if predicate, err = p.parseWhere(); err != nil {
+			return nil, err
+		}
+	}
+
 	return &SelectStatement{
 		Selected: selected,
 		From:     fromClause,
+		Where:    predicate,
 		Aliases:  aliases,
 	}, nil
 }
@@ -86,6 +97,13 @@ func (p *Parser) parseFrom() (*FromClause, error) {
 		return nil, err
 	}
 	return &FromClause{Address: from}, nil
+}
+
+func (p *Parser) parseWhere() (Predicate, error) {
+	if err := p.eat("where"); err != nil {
+		return nil, err
+	}
+	return p.parseOrCondition()
 }
 
 // parseSelectList returns the expressions to be selected and
@@ -136,6 +154,165 @@ func (p *Parser) parseAs() (string, error) {
 	return "", nil
 }
 
+func (p *Parser) parseOrCondition() (Predicate, error) {
+	predicate, err := p.parseAndCondition()
+	if err != nil {
+		return nil, err
+	}
+	return p.parseOrConditionRec(predicate)
+}
+
+func (p *Parser) parseOrConditionRec(left Predicate) (Predicate, error) {
+	token := p.peek()
+	if token == "or" {
+		if err := p.advance(); err != nil {
+			return nil, err
+		}
+
+		right, err := p.parseAndCondition()
+		if err != nil {
+			return nil, err
+		}
+		app, err := NewBoolBinaryApplication(left, right, token)
+		if err != nil {
+			return nil, err
+		}
+		return p.parseOrConditionRec(app)
+	}
+	return left, nil
+}
+
+func (p *Parser) parseAndCondition() (Predicate, error) {
+	predicate, err := p.parseNegatablePredicate()
+	if err != nil {
+		return nil, err
+	}
+	return p.parseAndConditionRec(predicate)
+}
+
+func (p *Parser) parseAndConditionRec(left Predicate) (Predicate, error) {
+	token := p.peek()
+	if token == "and" {
+		if err := p.advance(); err != nil {
+			return nil, err
+		}
+
+		right, err := p.parseNegatablePredicate()
+		if err != nil {
+			return nil, err
+		}
+		app, err := NewBoolBinaryApplication(left, right, token)
+		if err != nil {
+			return nil, err
+		}
+		return p.parseAndConditionRec(app)
+	}
+	return left, nil
+}
+
+func (p *Parser) parseNegatablePredicate() (Predicate, error) {
+	token := p.peek()
+	if token == "not" {
+		if err := p.advance(); err != nil {
+			return nil, err
+		}
+
+		unary, err := p.parseNegatablePredicate()
+		if err != nil {
+			return nil, err
+		}
+		return NewPredUnaryApplication(unary, token)
+	}
+	return p.parseSimplePredicate()
+}
+
+func (p *Parser) parseSimplePredicate() (Predicate, error) {
+	token := p.peek()
+
+	if token == "(" {
+		p.advance()
+		predicate, err := p.parseOrCondition()
+		if err != nil {
+			return nil, err
+		}
+		p.eat(")")
+		return predicate, nil
+	}
+
+	exp, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+	token = p.peek()
+
+	// handle IN and NOT IN syntaxes
+	if token == "not" || token == "in" {
+		negate := false
+		if token == "not" {
+			negate = true
+			if err := p.advance(); err != nil {
+				return nil, err
+			}
+		}
+
+		predicate, err := p.parseIn(exp)
+		if err != nil {
+			return nil, err
+		}
+		if negate {
+			predicate = NegatePredicate(predicate)
+		}
+		return predicate, nil
+	}
+
+	if token == "is" {
+		if err := p.advance(); err != nil {
+			return nil, err
+		}
+		negate := false
+		if p.peek() == "not" {
+			p.advance()
+			negate = true
+		}
+		target, err := p.eatIdentifier()
+		if err != nil {
+			return nil, err
+		}
+		predicate := NewIsOperator(exp, target)
+		if negate {
+			predicate = NegatePredicate(predicate)
+		}
+		return predicate, nil
+	}
+
+	if IsComparisonOperator(token) {
+		if err := p.advance(); err != nil {
+			return nil, err
+		}
+		right, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		return NewCompBinaryApplication(exp, right, token)
+	}
+
+	return nil, fmt.Errorf("expected predicate, token was %s", token)
+}
+
+func (p *Parser) parseIn(needle Expression) (Predicate, error) {
+	if err := p.eat("in"); err != nil {
+		return nil, err
+	}
+	haystack, err := p.parseExpList()
+	if err != nil {
+		return nil, err
+	}
+	if len(haystack) == 0 {
+		return nil, fmt.Errorf("empty list")
+	}
+	return NewInOperator(needle, haystack), nil
+}
+
 func (p *Parser) parseExpression() (Expression, error) {
 	term, err := p.parseTerm()
 	if err != nil {
@@ -155,7 +332,7 @@ func (p *Parser) parseRecExpression(left Expression) (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		app, err := NewBinaryApplication(left, right, token)
+		app, err := NewIntBinaryApplication(left, right, token)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +360,7 @@ func (p *Parser) parseRecTerm(left Expression) (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		app, err := NewBinaryApplication(left, right, token)
+		app, err := NewIntBinaryApplication(left, right, token)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +380,7 @@ func (p *Parser) parseUnary() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		return NewUnaryApplication(unary, token)
+		return NewIntUnaryApplication(unary, token)
 	}
 	return p.parseFactor()
 }
@@ -259,14 +436,14 @@ func (p *Parser) parseFuncCall() (Expression, error) {
 	if err != nil {
 		return nil, err
 	}
-	args, err := p.parseArgsList()
+	args, err := p.parseExpList()
 	if err != nil {
 		return nil, err
 	}
 	return NewFunctionCall(funcName, args), nil
 }
 
-func (p *Parser) parseArgsList() ([]Expression, error) {
+func (p *Parser) parseExpList() ([]Expression, error) {
 	var arguments []Expression
 	for i := 0; (i == 0 && p.peek() == "(") || (i > 0 && p.peek() == ","); i++ {
 		p.advance()

@@ -26,6 +26,7 @@ var (
 	one         = NewIntValue(big.NewInt(1))
 	ten         = NewIntValue(big.NewInt(10))
 	msgValue    = NewAttribute([]string{"msg", "value"})
+	msgSender   = NewAttribute([]string{"msg", "sender"})
 	sumMsgValue = NewFunctionCall("sum", []Expression{msgValue})
 )
 
@@ -52,9 +53,9 @@ func TestParseFactor(t *testing.T) {
 func TestParseUnary(t *testing.T) {
 	testCases := map[string]Expression{
 		"1":               one,
-		"-1":              MustNewUnaryApplication(one, "-"),
-		"-msg.value":      MustNewUnaryApplication(msgValue, "-"),
-		"+SUM(msg.value)": MustNewUnaryApplication(NewFunctionCall("sum", []Expression{msgValue}), "+"),
+		"-1":              MustNewIntUnaryApplication(one, "-"),
+		"-msg.value":      MustNewIntUnaryApplication(msgValue, "-"),
+		"+SUM(msg.value)": MustNewIntUnaryApplication(NewFunctionCall("sum", []Expression{msgValue}), "+"),
 	}
 	for input, expected := range testCases {
 		parser, err := NewParser(NewLexer(input))
@@ -67,10 +68,10 @@ func TestParseUnary(t *testing.T) {
 
 func TestParseTerm(t *testing.T) {
 	testCases := map[string]Expression{
-		"1 * 10":         MustNewBinaryApplication(one, ten, "*"),
-		"msg.value / 10": MustNewBinaryApplication(msgValue, ten, "/"),
-		"-SUM(msg.value) * 10 / COUNT(tx)": MustNewBinaryApplication(
-			MustNewBinaryApplication(MustNewUnaryApplication(sumMsgValue, "-"), ten, "*"),
+		"1 * 10":         MustNewIntBinaryApplication(one, ten, "*"),
+		"msg.value / 10": MustNewIntBinaryApplication(msgValue, ten, "/"),
+		"-SUM(msg.value) * 10 / COUNT(tx)": MustNewIntBinaryApplication(
+			MustNewIntBinaryApplication(MustNewIntUnaryApplication(sumMsgValue, "-"), ten, "*"),
 			NewFunctionCall("count", []Expression{NewAttribute([]string{"tx"})}),
 			"/",
 		),
@@ -86,12 +87,12 @@ func TestParseTerm(t *testing.T) {
 
 func TestParseExpression(t *testing.T) {
 	testCases := map[string]Expression{
-		"1 + 10":             MustNewBinaryApplication(one, ten, "+"),
-		"msg.value + 1 / 10": MustNewBinaryApplication(msgValue, MustNewBinaryApplication(one, ten, "/"), "+"),
-		"1 + -SUM(msg.value) * 10 / COUNT(tx) - 10": MustNewBinaryApplication(
-			MustNewBinaryApplication(one,
-				MustNewBinaryApplication(
-					MustNewBinaryApplication(MustNewUnaryApplication(sumMsgValue, "-"), ten, "*"),
+		"1 + 10":             MustNewIntBinaryApplication(one, ten, "+"),
+		"msg.value + 1 / 10": MustNewIntBinaryApplication(msgValue, MustNewIntBinaryApplication(one, ten, "/"), "+"),
+		"1 + -SUM(msg.value) * 10 / COUNT(tx) - 10": MustNewIntBinaryApplication(
+			MustNewIntBinaryApplication(one,
+				MustNewIntBinaryApplication(
+					MustNewIntBinaryApplication(MustNewIntUnaryApplication(sumMsgValue, "-"), ten, "*"),
 					NewFunctionCall("count", []Expression{NewAttribute([]string{"tx"})}),
 					"/",
 				),
@@ -118,11 +119,41 @@ func TestBasicSelect(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, stmt.Selected, 2)
 	assert.Len(t, stmt.Aliases, 1)
-	firstExp := MustNewBinaryApplication(sumMsgValue, ten, "/")
+	firstExp := MustNewIntBinaryApplication(sumMsgValue, ten, "/")
 	assert.True(t, firstExp.Equals(stmt.Selected[0]), "%v != %v", firstExp, stmt.Selected[0])
 	assert.True(t, firstExp.Equals(stmt.Aliases["sum"]), "%v != %v", firstExp, stmt.Aliases["sum"])
 	secondExp := NewFunctionCall("count", []Expression{NewAttribute([]string{"tx"})})
 	assert.True(t, secondExp.Equals(stmt.Selected[1]), "%v != %v", secondExp, stmt.Selected[1])
 	expectedAddress, _ := big.NewInt(0).SetString("1234abcd", 16)
 	assert.Equal(t, expectedAddress, stmt.From.Address)
+}
+
+func TestSelectWithWhere(t *testing.T) {
+	query := `select tx.hash from 0x1234abcd
+	where SUM(msg.value) > 10 AND not (msg.sender is not address OR msg.sender = 0x54321 OR
+		msg.sender in (0x123, 0x432))`
+
+	parser, err := NewParser(NewLexer(query))
+	assert.Nil(t, err)
+	stmt, err := parser.ParseSelect()
+	assert.Nil(t, err)
+	expected := MustNewBoolBinaryApplication(
+		MustNewCompBinaryApplication(sumMsgValue, ten, ">"),
+		NegatePredicate(
+			MustNewBoolBinaryApplication(
+				MustNewBoolBinaryApplication(
+					NegatePredicate(NewIsOperator(msgSender, "address")),
+					MustNewCompBinaryApplication(msgSender, NewIntValue(big.NewInt(0x54321)), "="),
+					"or",
+				),
+				NewInOperator(msgSender, []Expression{
+					NewIntValue(big.NewInt(0x123)),
+					NewIntValue(big.NewInt(0x432)),
+				}),
+				"or",
+			),
+		),
+		"and",
+	)
+	assert.True(t, expected.Equals(stmt.Where), "expected != actual:\n%v != %v", expected, stmt.Where)
 }
