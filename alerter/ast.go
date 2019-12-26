@@ -592,7 +592,7 @@ func (op *InOperator) Execute(env *Env) (Value, error) {
 	return NewBoolValue(res), err
 }
 
-// IsOperator is the IS operator: exp IS ADDRESS
+// IsOperator is the IS operator: exp IS CONTRACT
 type IsOperator struct {
 	Operand Expression
 	Target  string

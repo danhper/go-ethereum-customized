@@ -130,7 +130,7 @@ func TestBasicSelect(t *testing.T) {
 
 func TestSelectWithWhere(t *testing.T) {
 	query := `select tx.hash from 0x1234abcd
-	where SUM(msg.value) > 10 AND not (msg.sender is not address OR msg.sender = 0x54321 OR
+	where SUM(msg.value) > 10 AND not (msg.sender is not contract OR msg.sender = 0x54321 OR
 		msg.sender in (0x123, 0x432))`
 
 	parser, err := NewParser(NewLexer(query))
@@ -142,7 +142,7 @@ func TestSelectWithWhere(t *testing.T) {
 		NegatePredicate(
 			MustNewBoolBinaryApplication(
 				MustNewBoolBinaryApplication(
-					NegatePredicate(NewIsOperator(msgSender, "address")),
+					NegatePredicate(NewIsOperator(msgSender, "contract")),
 					MustNewCompBinaryApplication(msgSender, NewIntValue(big.NewInt(0x54321)), "="),
 					"or",
 				),
