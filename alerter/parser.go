@@ -56,6 +56,13 @@ func NewParser(lexer *Lexer) (*Parser, error) {
 
 // ParseSelect parses an EMQL select statement
 func (p *Parser) ParseSelect() (*SelectStatement, error) {
+	var predicate Predicate = nil
+	var since *BlockRef = nil
+	var until *BlockRef = nil
+	var limit *int64 = nil
+	var offset *int64 = nil
+	var groupBy *GroupByClause = nil
+
 	if err := p.eat("select"); err != nil {
 		return nil, err
 	}
@@ -65,17 +72,71 @@ func (p *Parser) ParseSelect() (*SelectStatement, error) {
 		return nil, err
 	}
 
+	if err := p.eat("from"); err != nil {
+		return nil, err
+	}
 	fromClause, err := p.parseFrom()
 	if err != nil {
 		return nil, err
 	}
 
 	token := p.peek()
-
-	var predicate Predicate = nil
 	if token == "where" {
-		var err error
 		if predicate, err = p.parseWhere(); err != nil {
+			return nil, err
+		}
+	}
+
+	token = p.peek()
+	if token == "since" {
+		if err = p.advance(); err != nil {
+			return nil, err
+		}
+		if since, err = p.parseBlockRef(); err != nil {
+			return nil, err
+		}
+	}
+
+	token = p.peek()
+	if token == "until" {
+		if err = p.advance(); err != nil {
+			return nil, err
+		}
+		if until, err = p.parseBlockRef(); err != nil {
+			return nil, err
+		}
+	}
+
+	token = p.peek()
+	if token == "limit" {
+		if err = p.advance(); err != nil {
+			return nil, err
+		}
+		limitValue, err := p.eatIntLiteral()
+		if err != nil {
+			return nil, err
+		}
+		limit = &limitValue
+	}
+
+	token = p.peek()
+	if token == "offset" {
+		if err = p.advance(); err != nil {
+			return nil, err
+		}
+		offsetValue, err := p.eatIntLiteral()
+		if err != nil {
+			return nil, err
+		}
+		offset = &offsetValue
+	}
+
+	token = p.peek()
+	if token == "group by" {
+		if err = p.advance(); err != nil {
+			return nil, err
+		}
+		if groupBy, err = p.parseGroupBy(); err != nil {
 			return nil, err
 		}
 	}
@@ -84,14 +145,16 @@ func (p *Parser) ParseSelect() (*SelectStatement, error) {
 		Selected: selected,
 		From:     fromClause,
 		Where:    predicate,
+		Since:    since,
+		Until:    until,
+		Limit:    limit,
+		Offset:   offset,
+		GroupBy:  groupBy,
 		Aliases:  aliases,
 	}, nil
 }
 
 func (p *Parser) parseFrom() (*FromClause, error) {
-	if err := p.eat("from"); err != nil {
-		return nil, err
-	}
 	from, err := p.parseHex()
 	if err != nil {
 		return nil, err
@@ -104,6 +167,14 @@ func (p *Parser) parseWhere() (Predicate, error) {
 		return nil, err
 	}
 	return p.parseOrCondition()
+}
+
+func (p *Parser) parseBlockRef() (*BlockRef, error) {
+	blockNum, err := p.eatIntLiteral()
+	if err != nil {
+		return nil, err
+	}
+	return NewBlockRef(blockNum), nil
 }
 
 // parseSelectList returns the expressions to be selected and
@@ -152,6 +223,68 @@ func (p *Parser) parseAs() (string, error) {
 		return p.eatIdentifier()
 	}
 	return "", nil
+}
+
+func (p *Parser) parseGroupBy() (*GroupByClause, error) {
+	groupByClause := NewGroupByClause()
+	if err := p.parseGroupByElem(groupByClause); err != nil {
+		return nil, err
+	}
+	token := p.peek()
+	for token == "," {
+		if err := p.advance(); err != nil {
+			return nil, err
+		}
+
+		if err := p.parseGroupByElem(groupByClause); err != nil {
+			return nil, err
+		}
+		token = p.peek()
+	}
+	return groupByClause, nil
+}
+
+func (p *Parser) parseGroupByElem(groupBy *GroupByClause) error {
+	token := p.peek()
+
+	if token == "blocks" || token == "transactions" {
+		if err := p.advance(); err != nil {
+			return err
+		}
+		if err := p.eat("("); err != nil {
+			return err
+		}
+
+		value, err := p.eatIntLiteral()
+		if err != nil {
+			return err
+		}
+		if err := p.eat(")"); err != nil {
+			return err
+		}
+
+		if token == "blocks" {
+			if groupBy.BlocksCount != nil {
+				return fmt.Errorf("can only group once by blocks")
+			}
+			groupBy.BlocksCount = &value
+		}
+
+		if token == "transactions" {
+			if groupBy.TransactionsCount != nil {
+				return fmt.Errorf("can only group once by transactions")
+			}
+			groupBy.TransactionsCount = &value
+		}
+	} else { // group using attribute
+		attribute, err := p.parseAttribute()
+		if err != nil {
+			return err
+		}
+		groupBy.Attributes = append(groupBy.Attributes, attribute)
+	}
+
+	return nil
 }
 
 func (p *Parser) parseOrCondition() (Predicate, error) {
@@ -456,7 +589,7 @@ func (p *Parser) parseExpList() ([]Expression, error) {
 	return arguments, p.eat(")")
 }
 
-func (p *Parser) parseAttribute() (Expression, error) {
+func (p *Parser) parseAttribute() (*Attribute, error) {
 	id, err := p.eatIdentifier()
 	if err != nil {
 		return nil, err
@@ -464,7 +597,7 @@ func (p *Parser) parseAttribute() (Expression, error) {
 	return p.parseAttributeParts([]string{id})
 }
 
-func (p *Parser) parseAttributeParts(parts []string) (Expression, error) {
+func (p *Parser) parseAttributeParts(parts []string) (*Attribute, error) {
 	for p.peek() == "." {
 		p.advance()
 		part, err := p.eatIdentifier()
@@ -535,4 +668,17 @@ func (p *Parser) eat(token string) error {
 		return fmt.Errorf("expected %s but got %s", token, p.peek())
 	}
 	return p.advance()
+}
+
+func (p *Parser) eatIntLiteral() (res int64, err error) {
+	token := p.peek()
+	if strings.HasPrefix(token, "0x") {
+		res, err = strconv.ParseInt(token[2:], 16, 64)
+	} else {
+		res, err = strconv.ParseInt(token, 10, 64)
+	}
+	if err != nil {
+		return
+	}
+	return res, p.advance()
 }

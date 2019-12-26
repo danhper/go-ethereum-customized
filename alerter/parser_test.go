@@ -157,3 +157,39 @@ func TestSelectWithWhere(t *testing.T) {
 	)
 	assert.True(t, expected.Equals(stmt.Where), "expected != actual:\n%v != %v", expected, stmt.Where)
 }
+
+func TestSelectWithGroup(t *testing.T) {
+	query := `select SUM(msg.value) from 0x1234abcd group by blocks(3), transactions(4), msg.sender`
+	parser, err := NewParser(NewLexer(query))
+	assert.Nil(t, err)
+	stmt, err := parser.ParseSelect()
+	assert.Nil(t, err)
+	assert.Nil(t, stmt.Where)
+	groupBy := stmt.GroupBy
+	assert.NotNil(t, groupBy)
+	assert.Equal(t, int64(3), *groupBy.BlocksCount)
+	assert.Equal(t, int64(4), *groupBy.TransactionsCount)
+	assert.Equal(t, 1, len(groupBy.Attributes))
+	assert.True(t, msgSender.Equals(groupBy.Attributes[0]))
+}
+
+func TestFullStatement(t *testing.T) {
+	query := `
+		select SUM(msg.value) from 0x1234abcd
+		where msg.sender is not address
+		since 1000 until 1500
+		limit 5 offset 2
+		group by blocks(3), transactions(4), msg.sender`
+
+	parser, err := NewParser(NewLexer(query))
+	assert.Nil(t, err)
+	stmt, err := parser.ParseSelect()
+	assert.Nil(t, err)
+	assert.NotNil(t, stmt.Where)
+	assert.NotNil(t, stmt.GroupBy)
+	assert.Equal(t, int64(1000), stmt.Since.BlockNum)
+	assert.Equal(t, int64(1500), stmt.Until.BlockNum)
+	assert.Equal(t, int64(5), *stmt.Limit)
+	assert.Equal(t, int64(2), *stmt.Offset)
+	assert.Equal(t, int64(3), *stmt.GroupBy.BlocksCount)
+}

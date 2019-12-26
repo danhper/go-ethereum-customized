@@ -905,23 +905,30 @@ type Predicate interface {
 	ExecuteBool(env *Env) (bool, error)
 }
 
-// LimitClause is a limit clause
-type LimitClause struct {
-	Limit int64
+// BlockRef is a reference to a block
+type BlockRef struct {
+	BlockNum int64
 }
 
-// SinceClause is a since clause
-type SinceClause struct {
-	Since int64
-}
-
-// UntilClause is an until clause
-type UntilClause struct {
-	Until int64
+// NewBlockRef returns a new reference to a block
+func NewBlockRef(blockNum int64) *BlockRef {
+	return &BlockRef{BlockNum: blockNum}
 }
 
 // GroupByClause is a group by clause
 type GroupByClause struct {
+	BlocksCount       *int64
+	TransactionsCount *int64
+	Attributes        []*Attribute
+}
+
+// NewGroupByClause returns a new empty group GROUP BY clause
+func NewGroupByClause() *GroupByClause {
+	return &GroupByClause{
+		BlocksCount:       nil,
+		TransactionsCount: nil,
+		Attributes:        nil,
+	}
 }
 
 // SelectStatement is a full EMQL select statement
@@ -929,9 +936,10 @@ type SelectStatement struct {
 	Selected []Expression
 	From     *FromClause
 	Where    Predicate
-	Limit    LimitClause
-	Since    SinceClause
-	Until    UntilClause
-	GroupBy  GroupByClause
+	Since    *BlockRef
+	Until    *BlockRef
+	Limit    *int64
+	Offset   *int64
+	GroupBy  *GroupByClause
 	Aliases  map[string]Expression
 }
