@@ -1,11 +1,15 @@
 package alerter
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
 	"strings"
+	"unicode"
 )
 
-var caseInsensitiveTokens map[string]bool = map[string]bool{
+// the poor man's set
+var caseInsensitiveTokens = map[string]bool{
 	"select":       true,
 	"from":         true,
 	"as":           true,
@@ -24,90 +28,127 @@ var caseInsensitiveTokens map[string]bool = map[string]bool{
 	"in":           true,
 }
 
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\n' || c == '\t'
-}
-
-func isAlphaNum(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-}
-
 // Lexer represents a lexer for a single query
 type Lexer struct {
-	query        string
-	index        int
+	reader       *bufio.Reader
 	hasNext      bool
+	currentRune  *rune
 	currentToken string
 }
 
 // NewLexer returns a new lexer initialized with the query
 func NewLexer(query string) *Lexer {
 	lexer := &Lexer{
-		query:        query,
-		index:        0,
+		reader:       bufio.NewReader(bytes.NewBufferString(query)),
 		hasNext:      false,
 		currentToken: "",
+		currentRune:  nil,
 	}
+	lexer.advance()
 	lexer.readToken()
 	return lexer
 }
 
 // IsDone returns true if the lexer does not have any more tokens
 func (l *Lexer) IsDone() bool {
-	return l.index >= len(l.query)
+	return l.currentRune == nil
 }
 
-// peek returns the current char without advancing
-func (l *Lexer) peek() byte {
-	if l.IsDone() {
-		return '\000'
-	}
-	return l.query[l.index]
+// peek returns the current rune without advancing
+func (l *Lexer) peek() rune {
+	return *l.currentRune
 }
 
 func (l *Lexer) advance() {
-	if !l.IsDone() {
-		l.index++
+	res, _, err := l.reader.ReadRune()
+	if err != nil {
+		l.currentRune = nil
+		return
 	}
+	l.currentRune = &res
 }
 
 func (l *Lexer) skipWhitespaces() {
-	for isWhitespace(l.peek()) {
+	for !l.IsDone() && unicode.IsSpace(l.peek()) {
 		l.advance()
 	}
 }
 
-func (l *Lexer) readToken() {
+func (l *Lexer) readString() error {
+	l.advance()
+	buffer := bytes.NewBufferString("\"")
+	c := l.peek()
+	escaped := false
+
+	for escaped || c != '"' {
+		escaped = c == '\\'
+		buffer.WriteRune(c)
+		l.advance()
+		if l.IsDone() {
+			return fmt.Errorf("reached EOS inside string")
+		}
+		c = l.peek()
+	}
+	buffer.WriteRune('"')
+	l.advance()
+
+	l.currentToken = buffer.String()
+
+	return nil
+}
+
+func (l *Lexer) readSymbol(c rune) {
+	var token string
+	if c == '<' && l.peek() == '>' {
+		token = "<>"
+		l.advance()
+	} else if (c == '>' || c == '<') && l.peek() == '=' {
+		token = string([]rune{c, l.peek()})
+		l.advance()
+	} else {
+		token = string([]rune{c})
+	}
+	l.currentToken = token
+}
+
+func (l *Lexer) skipLine() {
+	for !l.IsDone() && l.peek() != '\n' {
+		l.advance()
+	}
+	l.advance()
+}
+
+func (l *Lexer) readToken() error {
 	l.hasNext = true
 	l.skipWhitespaces()
 	if l.IsDone() {
 		l.hasNext = false
-		return
+		return nil
 	}
 
 	c := l.peek()
 
-	// NOTE: we only have symbols of 1 char for now
-	if !isAlphaNum(c) {
+	if c == '"' {
+		return l.readString()
+	}
+
+	if !(unicode.IsLetter(c) || unicode.IsDigit(c)) {
 		l.advance()
-		var token string
-		if c == '<' && l.peek() == '>' {
-			token = "<>"
-			l.advance()
-		} else if (c == '>' || c == '<') && l.peek() == '=' {
-			token = string([]byte{c, l.peek()})
-			l.advance()
-		} else {
-			token = string([]byte{c})
+		if c == '-' && l.peek() == '-' {
+			l.skipLine()
+			return l.readToken()
 		}
-		l.currentToken = token
-		return
+		l.readSymbol(c)
+		return nil
 	}
 
 	buffer := bytes.NewBufferString("")
-	for isAlphaNum(c) {
-		buffer.WriteByte(c)
+	for unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_' {
+		buffer.WriteRune(c)
 		l.advance()
+		if l.IsDone() {
+			break
+		}
 		c = l.peek()
 	}
 
@@ -116,21 +157,26 @@ func (l *Lexer) readToken() {
 	if _, exists := caseInsensitiveTokens[lowered]; exists {
 		l.currentToken = lowered
 	}
+	return nil
 }
 
 // NextToken returns the next token in the stream
-func (l *Lexer) NextToken() (string, bool) {
+func (l *Lexer) NextToken() (string, bool, error) {
+	var err error
+
 	if !l.hasNext {
-		return "", false
+		return "", false, nil
 	}
 	token := l.currentToken
-	l.readToken()
+	if err = l.readToken(); err != nil {
+		return "", false, err
+	}
 
 	// special case to treat group by as a single token
 	if token == "group" && l.currentToken == "by" {
 		token = "group by"
-		l.readToken()
+		err = l.readToken()
 	}
 
-	return token, true
+	return token, true, err
 }

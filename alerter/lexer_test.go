@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	simpleInput string = `select   sum(msg.value)	FROM 0xabcdef 
-	WHERE   msg.value  >= 5
+	simpleInput string = `select   sum(msg.value)	FROM 0xabcdef  -- comment
+	WHERE   msg.value  >= 5 -- other comment
+	and msg.sig = "ab\"cd"
 	group by BLOCKS(3)`
 )
 
@@ -17,12 +18,15 @@ func TestNextToken(t *testing.T) {
 	expectedTokens := []string{
 		"select", "sum", "(", "msg", ".", "value", ")", "from", "0xabcdef",
 		"where", "msg", ".", "value", ">=", "5",
+		"and", "msg", ".", "sig", "=", "\"ab\\\"cd\"",
 		"group by", "blocks", "(", "3", ")"}
 	for _, expected := range expectedTokens {
-		nextToken, hasNext := lexer.NextToken()
+		nextToken, hasNext, err := lexer.NextToken()
 		assert.True(t, hasNext)
 		assert.Equal(t, expected, nextToken)
+		assert.Nil(t, err)
 	}
-	_, hasNext := lexer.NextToken()
+	_, hasNext, err := lexer.NextToken()
+	assert.Nil(t, err)
 	assert.False(t, hasNext)
 }
