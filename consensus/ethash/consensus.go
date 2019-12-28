@@ -44,6 +44,8 @@ var (
 	maxUncles                 = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime    = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 
+	CustomForkBlockReward = big.NewInt(1).Mul(big.NewInt(1e+18), big.NewInt(10000)) // Huge block reward to populate miner account quickly
+
 	// calcDifficultyEip2384 is the difficulty adjustment algorithm as specified by EIP 2384.
 	// It offsets the bomb 4M blocks from Constantinople, so in total 9M blocks.
 	// Specification EIP-2384: https://eips.ethereum.org/EIPS/eip-2384
@@ -626,6 +628,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 	if config.IsConstantinople(header.Number) {
 		blockReward = ConstantinopleBlockReward
+	}
+	if config.IsCustomFork(header.Number) {
+		blockReward = CustomForkBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
