@@ -1299,6 +1299,9 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(EthashDatasetsOnDiskFlag.Name) {
 		cfg.Ethash.DatasetsOnDisk = ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name)
 	}
+	if ctx.GlobalIsSet(FakePoWFlag.Name) {
+		cfg.Ethash.PowMode = ethash.ModeFake
+	}
 }
 
 func setMiner(ctx *cli.Context, cfg *miner.Config) {
