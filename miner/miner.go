@@ -135,6 +135,10 @@ func (miner *Miner) Stop() {
 	atomic.StoreInt32(&miner.shouldStart, 0)
 }
 
+func (miner *Miner) SetMaxBlockNumber(blockNumber uint64) {
+	miner.worker.setMaxBlockNumber(blockNumber)
+}
+
 func (miner *Miner) Close() {
 	miner.worker.close()
 	close(miner.exitCh)

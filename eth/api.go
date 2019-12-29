@@ -120,6 +120,11 @@ func (api *PrivateMinerAPI) Stop() {
 	api.e.StopMining()
 }
 
+// SetMaxBlockNumber sets the maximum block number until which the miner should mine
+func (api *PrivateMinerAPI) SetMaxBlockNumber(blockNumber uint64) {
+	api.e.SetMinerMaxBlockNumber(blockNumber)
+}
+
 // SetExtra sets the extra data string that is included when this miner mines a block.
 func (api *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 	if err := api.e.Miner().SetExtra([]byte(extra)); err != nil {

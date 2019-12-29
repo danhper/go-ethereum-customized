@@ -177,6 +177,9 @@ type worker struct {
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
+
+	// Maintain forked version
+	maxBlockNumber *uint64
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
@@ -240,6 +243,15 @@ func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
+}
+
+func (w *worker) setMaxBlockNumber(blockNumber uint64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.maxBlockNumber == nil {
+		w.maxBlockNumber = new(uint64)
+	}
+	*w.maxBlockNumber = blockNumber
 }
 
 // setRecommitInterval updates the interval for miner sealing work recommitting.
@@ -606,6 +618,12 @@ func (w *worker) resultLoop() {
 
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
+
+			w.mu.RLock()
+			if w.maxBlockNumber != nil && block.NumberU64() >= *w.maxBlockNumber {
+				w.stop()
+			}
+			w.mu.RUnlock()
 
 		case <-w.exitCh:
 			return

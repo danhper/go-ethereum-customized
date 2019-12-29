@@ -487,6 +487,10 @@ func (s *Ethereum) StopMining() {
 	s.miner.Stop()
 }
 
+func (s *Ethereum) SetMinerMaxBlockNumber(blockNumber uint64) {
+	s.miner.SetMaxBlockNumber(blockNumber)
+}
+
 func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
