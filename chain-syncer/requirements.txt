@@ -1,0 +1,2 @@
+-e .[dev]
+web3==git+https://github.com/danhper/web3.py
