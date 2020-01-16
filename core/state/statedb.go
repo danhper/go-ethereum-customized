@@ -379,6 +379,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+		s.updateStateObject(stateObject)
 	}
 }
 
@@ -764,4 +765,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		return nil
 	})
+}
+
+func (s *StateDB) Root() common.Hash {
+	return s.trie.Hash()
 }

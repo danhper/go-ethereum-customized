@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -57,6 +58,17 @@ func (b *EthAPIBackend) CurrentBlock() *types.Block {
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
+}
+
+func (b *EthAPIBackend) SetCode(ctx context.Context, address common.Address, code hexutil.Bytes) error {
+	state, err := b.eth.BlockChain().State()
+	if err != nil {
+		return err
+	}
+
+	state.SetCode(address, code)
+	_, err = state.Commit(false)
+	return err
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {

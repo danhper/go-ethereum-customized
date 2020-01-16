@@ -543,6 +543,12 @@ web3._extend({
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'setCode',
+			call: 'eth_setCode',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null]
+		})
 	],
 	properties: [
 		new web3._extend.Property({

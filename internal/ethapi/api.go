@@ -721,6 +721,11 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 	return code, state.Error()
 }
 
+// SetCode sets the code stored at the given address
+func (s *PublicBlockChainAPI) SetCode(ctx context.Context, address common.Address, code hexutil.Bytes) error {
+	return s.b.SetCode(ctx, address, code)
+}
+
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.

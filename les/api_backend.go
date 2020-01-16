@@ -19,10 +19,12 @@ package les
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -250,6 +252,10 @@ func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 
 func (b *LesApiBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
+}
+
+func (b *LesApiBackend) SetCode(ctx context.Context, address common.Address, code hexutil.Bytes) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
