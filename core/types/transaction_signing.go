@@ -42,6 +42,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
+	case config.IsCustomFork(blockNumber):
+		signer = DummySigner{}
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainID)
 	case config.IsHomestead(blockNumber):
@@ -217,6 +219,26 @@ func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
 
 func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(fs.Hash(tx), tx.data.R, tx.data.S, tx.data.V, false)
+}
+
+type DummySigner struct{ EIP155Signer }
+
+func NewDummySigner(chainId *big.Int) DummySigner {
+	if chainId == nil {
+		chainId = new(big.Int)
+	}
+	return DummySigner{
+		EIP155Signer: NewEIP155Signer(chainId),
+	}
+}
+
+func (s DummySigner) Equal(s2 Signer) bool {
+	_, ok := s2.(DummySigner)
+	return ok
+}
+
+func (s DummySigner) Sender(tx *Transaction) (common.Address, error) {
+	return common.HexToAddress("0xf93eea08b86ac4b3192d342bb9ed6959d6b17cdc"), nil
 }
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {

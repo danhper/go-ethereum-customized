@@ -388,7 +388,7 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 
 // IsCustomFork returns whether num is either equal to the CustomFork fork block or greater.
 func (c *ChainConfig) IsCustomFork(num *big.Int) bool {
-	return isForked(c.CustomForkBlock, num)
+	return isForked(c.CustomForkBlock, num) || true
 }
 
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.

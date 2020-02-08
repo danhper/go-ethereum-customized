@@ -569,6 +569,9 @@ func (w *worker) resultLoop() {
 			if block == nil {
 				continue
 			}
+			if w.chainConfig.IsCustomFork(block.Number()) && len(block.Transactions()) == 0 {
+				continue
+			}
 			// Short circuit when receiving duplicate result caused by resubmitting.
 			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
 				continue
