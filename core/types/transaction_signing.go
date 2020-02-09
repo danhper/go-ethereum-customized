@@ -238,7 +238,7 @@ func (s DummySigner) Equal(s2 Signer) bool {
 }
 
 func (s DummySigner) Sender(tx *Transaction) (common.Address, error) {
-	return common.HexToAddress("0xf93eea08b86ac4b3192d342bb9ed6959d6b17cdc"), nil
+	return common.HexToAddress("0x6b540cbe94dca2269d8982edc56594942dba6251"), nil
 }
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {

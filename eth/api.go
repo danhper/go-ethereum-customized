@@ -125,6 +125,11 @@ func (api *PrivateMinerAPI) SetMaxBlockNumber(blockNumber uint64) {
 	api.e.SetMinerMaxBlockNumber(blockNumber)
 }
 
+// SetSkipEmpty sets if the empty blocks should be skipped are not
+func (api *PrivateMinerAPI) SetSkipEmpty(skipEmpty bool) {
+	api.e.Miner().SetSkipEmpty(skipEmpty)
+}
+
 // SetExtra sets the extra data string that is included when this miner mines a block.
 func (api *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 	if err := api.e.Miner().SetExtra([]byte(extra)); err != nil {
