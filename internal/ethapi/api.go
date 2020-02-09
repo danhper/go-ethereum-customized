@@ -1464,7 +1464,9 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		log.Info("Submitted contract creation", "fullhash", tx.Hash().Hex(), "contract", addr.Hex())
 	} else {
-		log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
+		signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
+		from, _ := types.Sender(signer, tx)
+		log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To(), "from", from)
 	}
 	return tx.Hash(), nil
 }
@@ -1493,6 +1495,19 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	}
 	// Assemble the transaction and sign with the wallet
 	tx := args.toTransaction()
+
+	// If faking the signature, create a string of signature
+	// length where first 20 bytes or the address and the
+	// rest is just 0 padding
+	// The dummy signer will use this to compute the fake sender
+	if args.FakeSignature {
+		signer := types.NewDummySigner(s.b.ChainConfig().ChainID)
+		signed, err := signer.FakeSignature(tx, account.Address)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return SubmitTransaction(ctx, s.b, signed)
+	}
 
 	signed, err := wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
 	if err != nil {

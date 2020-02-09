@@ -232,13 +232,24 @@ func NewDummySigner(chainId *big.Int) DummySigner {
 	}
 }
 
-func (s DummySigner) Equal(s2 Signer) bool {
+func (ds DummySigner) Equal(s2 Signer) bool {
 	_, ok := s2.(DummySigner)
 	return ok
 }
 
-func (s DummySigner) Sender(tx *Transaction) (common.Address, error) {
-	return common.HexToAddress("0x6b540cbe94dca2269d8982edc56594942dba6251"), nil
+func (ds DummySigner) FakeSignature(tx *Transaction, address common.Address) (*Transaction, error) {
+	addressBytes := address.Bytes()
+	zeroPadding := make([]byte, crypto.SignatureLength-common.AddressLength)
+	signature := append(addressBytes, zeroPadding...)
+	return tx.WithSignature(ds, signature)
+}
+
+func (ds DummySigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *big.Int, err error) {
+	return big.NewInt(0).SetBytes(sig[0:20]), big.NewInt(0), big.NewInt(30), nil
+}
+
+func (ds DummySigner) Sender(tx *Transaction) (common.Address, error) {
+	return common.BigToAddress(tx.data.R), nil
 }
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
