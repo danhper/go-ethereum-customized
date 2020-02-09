@@ -1122,6 +1122,9 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	if tx.Protected() {
 		signer = types.NewEIP155Signer(tx.ChainId())
 	}
+	if tx.DummySignature() {
+		signer = types.NewDummySigner(tx.ChainId())
+	}
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 

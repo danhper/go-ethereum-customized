@@ -114,6 +114,13 @@ func (tx *Transaction) Protected() bool {
 	return isProtectedV(tx.data.V)
 }
 
+// DummySignature returns whether the transaction has a dummy signature or not
+// When signature is dummy we hard code R to be the address of the sender
+// and S to be 42
+func (tx *Transaction) DummySignature() bool {
+	return tx.data.S.Cmp(big.NewInt(42)) == 0
+}
+
 func isProtectedV(V *big.Int) bool {
 	if V.BitLen() <= 8 {
 		v := V.Uint64()

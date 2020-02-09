@@ -245,7 +245,7 @@ func (ds DummySigner) FakeSignature(tx *Transaction, address common.Address) (*T
 }
 
 func (ds DummySigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *big.Int, err error) {
-	return big.NewInt(0).SetBytes(sig[0:20]), big.NewInt(0), big.NewInt(30), nil
+	return big.NewInt(0).SetBytes(sig[0:20]), big.NewInt(42), big.NewInt(30), nil
 }
 
 func (ds DummySigner) Sender(tx *Transaction) (common.Address, error) {
