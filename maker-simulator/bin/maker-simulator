@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
 
-from feed_syncer import cli
+from maker_simulator import cli
 
 cli.run()
