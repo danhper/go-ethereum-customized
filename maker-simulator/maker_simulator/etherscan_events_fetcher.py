@@ -38,8 +38,8 @@ def fetch_events(contract_address, fout, max_to_fetch=100_000):
             time.sleep(2 ** retry_count)
             retry_count += 1
             if retry_count <= MAX_RETRIES:
-                logging.warning("failed with status %s, retrying (%s/%s)",
-                                payload["status"], retry_count, MAX_RETRIES)
+                logging.warning("failed with status %s: %s, retrying (%s/%s)",
+                                payload["status"], payload, retry_count, MAX_RETRIES)
             continue
 
         retry_count = 0
