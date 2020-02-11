@@ -1,3 +1,4 @@
 data/mkr-events.jsonl.gz filter=lfs diff=lfs merge=lfs -text
 data/mkr-governance-events.json.gz filter=lfs diff=lfs merge=lfs -text
 data/mkr-governance-txs.json.gz filter=lfs diff=lfs merge=lfs -text
+data/states.pickle filter=lfs diff=lfs merge=lfs -text

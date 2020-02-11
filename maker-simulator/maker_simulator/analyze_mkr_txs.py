@@ -1,17 +1,24 @@
 import argparse
+import pickle
 import logging
 import gzip
 import json
+from functools import lru_cache
 import datetime as dt
 from collections import defaultdict
 import copy
 from os import path
 
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import web3
 
+
+
 # contract: https://etherscan.io/address/0x9ef05f7f6deb616fd37ac3c959a2ddd25a54e4f5
+
+STATE_CACHE = "./data/states.pickle"
 
 
 def get_func_signature_hash(signature):
@@ -28,7 +35,7 @@ FUNC_HASHES = dict(
     free=get_func_signature_hash("free(uint256)"),
 )
 
-TRACK_VOTE_THRESHOLD = 30_000
+TRACK_VOTE_THRESHOLD = 50_000
 
 STR_WORD_SIZE = 64
 STR_ADDRESS_SIZE = 40
@@ -101,6 +108,7 @@ def compute_locked_amount_evolution(transactions):
     return locked_amounts, timestamps
 
 
+@lru_cache(maxsize=None)
 def hash_addresses(addresses):
     return web3.Web3.soliditySha3(
         ["address[]"],
@@ -115,7 +123,9 @@ class State:
         self.votes = defaultdict(int)
         self.deposits = defaultdict(int)
         self.approvals = defaultdict(int)
+        self.fetched_approvals = {}
         self.timestamp = None
+        self.block_number = None
         self.hat = None
 
     def add_weight(self, weight, slate):
@@ -149,7 +159,8 @@ class State:
 
     def etch(self, tx):
         addresses = get_vote_addresses(tx)
-        return self._etch(addresses)
+        slate = self._etch(addresses)
+        return slate
 
     def vote(self, tx):
         addresses = get_vote_addresses(tx)
@@ -171,14 +182,31 @@ class State:
         self.add_weight(weight, slate)
 
     def lift(self, tx):
-        self.hat = get_lift_address(tx)
+        lift_address = get_lift_address(tx)
+        self.hat = lift_address
 
     def process_tx(self, tx):
         self.timestamp = get_time(tx)
+        self.block_number = int(tx["blockNumber"])
         for func_name in FUNC_HASHES:
             if is_call(tx, func_name):
                 getattr(self, func_name)(tx)
                 break
+
+
+def refetch_approvals(states):
+    w3 = web3.Web3(web3.HTTPProvider("http://satoshi.doc.ic.ac.uk:8545"))
+    with open("./contracts/mkr-governance.json") as f:
+        abi = json.load(f)
+    contract_address = w3.toChecksumAddress("0x9ef05f7f6deb616fd37ac3c959a2ddd25a54e4f5")
+    contract = w3.eth.contract(address=contract_address, abi=abi)
+    for i, state in enumerate(states):
+        if i % 100 == 0:
+            logging.info("progress: %s/%s", i, len(states))
+        block = state.block_number
+        for approval in state.approvals:
+            address = w3.toChecksumAddress(approval)
+            state.fetched_approvals[approval] = contract.functions.approvals(address).call(block_identifier=block) / 1e18
 
 
 def compute_votes_evolution(transactions):
@@ -188,6 +216,9 @@ def compute_votes_evolution(transactions):
         state = copy.deepcopy(state)
         state.process_tx(tx)
         states.append(state)
+    refetch_approvals(states)
+    with open(STATE_CACHE, "wb") as f:
+        pickle.dump(states, f)
     return states
 
 
@@ -206,20 +237,26 @@ def _plot_locked(timestamps, locked_amounts, output=None):
 
 
 def plot_votes_evolution(transactions, output=None):
-    states = compute_votes_evolution(transactions)
+    if path.exists(STATE_CACHE):
+        with open(STATE_CACHE, "rb") as f:
+            states = pickle.load(f)
+    else:
+        states = compute_votes_evolution(transactions)
 
     # sanity checking
     # locked_amounts = [sum(state.approvals.values()) for state in states]
     # _plot_locked(timestamps, locked_amounts)
 
+    hats = set(state.hat for state in states if state.hat)
+
     addresses_to_track = list(
         set(address
             for state in states
-            for address, amount in state.approvals.items()
-            if amount >= TRACK_VOTE_THRESHOLD))
+            for address, amount in state.fetched_approvals.items()
+            if amount >= TRACK_VOTE_THRESHOLD or address in hats))
 
     lines = list(zip(*[
-        [state.approvals.get(address, 0) for address in addresses_to_track]
+        [state.fetched_approvals.get(address, 0) for address in addresses_to_track]
         for state in states
     ]))
     timestamps = [state.timestamp for state in states]
@@ -255,10 +292,15 @@ plot_votes_parser = subparsers.add_parser("plot-votes")
 plot_votes_parser.add_argument("-o", "--output", help="output file")
 
 
+
 def main():
     args = parser.parse_args()
 
-    transactions = sorted(load_data(args.data_dir)["result"], key=lambda x: x["timeStamp"])
+    logging.basicConfig(level=logging.INFO)
+
+    sns.set(style="darkgrid")
+
+    transactions = sorted(load_data(args.data_dir)["result"], key=lambda x: (int(x["blockNumber"]), int(x["transactionIndex"])))
     successful_transactions = [tx for tx in transactions if tx["isError"] == "0"]
 
     if not args.command:
