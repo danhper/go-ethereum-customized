@@ -6,6 +6,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         # "web3", use forked version
+        "matplotlib",
     ],
     scripts=["./bin/maker-simulator"],
     extras_require={
