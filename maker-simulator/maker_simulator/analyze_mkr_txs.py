@@ -28,6 +28,8 @@ FUNC_HASHES = dict(
     free=get_func_signature_hash("free(uint256)"),
 )
 
+TRACK_VOTE_THRESHOLD = 30_000
+
 STR_WORD_SIZE = 64
 STR_ADDRESS_SIZE = 40
 
@@ -109,6 +111,7 @@ def hash_addresses(addresses):
 class State:
     def __init__(self):
         self.slates = defaultdict(list)
+        self.addresses_slates = defaultdict(list)
         self.votes = defaultdict(int)
         self.deposits = defaultdict(int)
         self.approvals = defaultdict(int)
@@ -129,18 +132,20 @@ class State:
         sender = tx["from"]
         wad = get_locked_amount(tx)
         self.deposits[sender] += wad
-        self.add_weight(wad, sender)
+        self.add_weight(wad, self.votes[sender])
 
     def free(self, tx):
         sender = tx["from"]
         wad = get_locked_amount(tx)
         self.deposits[sender] -= wad
-        self.sub_weight(wad, sender)
+        self.sub_weight(wad, self.votes[sender])
 
     def _etch(self, addresses):
-        addresses_hash = hash_addresses(addresses)
-        self.slates[addresses_hash] = addresses
-        return addresses_hash
+        slate = hash_addresses(addresses)
+        self.slates[slate] = addresses
+        for address in addresses:
+            self.addresses_slates[address].append(slate)
+        return slate
 
     def etch(self, tx):
         addresses = get_vote_addresses(tx)
@@ -158,7 +163,7 @@ class State:
 
     def _vote_slate(self, tx, slate):
         if slate not in self.slates:
-            logging.warning("slate not found %s", slate)
+            logging.warning("slate not found tx=%s slate=%s", tx["hash"], slate)
         sender = tx["from"]
         weight = self.deposits[sender]
         self.sub_weight(weight, self.votes[sender])
@@ -173,6 +178,7 @@ class State:
         for func_name in FUNC_HASHES:
             if is_call(tx, func_name):
                 getattr(self, func_name)(tx)
+                break
 
 
 def compute_votes_evolution(transactions):
@@ -185,10 +191,7 @@ def compute_votes_evolution(transactions):
     return states
 
 
-
-def plot_locked(transactions, output=None):
-    locked_amounts, timestamps = compute_locked_amount_evolution(transactions)
-
+def _plot_locked(timestamps, locked_amounts, output=None):
     fig, ax = plt.subplots()
     ax.plot(timestamps, locked_amounts)
     ax.set_xlabel("Date")
@@ -202,12 +205,54 @@ def plot_locked(transactions, output=None):
         plt.savefig(output)
 
 
+def plot_votes_evolution(transactions, output=None):
+    states = compute_votes_evolution(transactions)
+
+    # sanity checking
+    # locked_amounts = [sum(state.approvals.values()) for state in states]
+    # _plot_locked(timestamps, locked_amounts)
+
+    addresses_to_track = list(
+        set(address
+            for state in states
+            for address, amount in state.approvals.items()
+            if amount >= TRACK_VOTE_THRESHOLD))
+
+    lines = list(zip(*[
+        [state.approvals.get(address, 0) for address in addresses_to_track]
+        for state in states
+    ]))
+    timestamps = [state.timestamp for state in states]
+
+    fig, ax = plt.subplots()
+    for address, line in zip(addresses_to_track, lines):
+        ax.plot(timestamps, line, label="0x" + address[:10])
+    ax.set_xlabel("Date")
+    ax.set_ylabel("MKR amount")
+    fig.autofmt_xdate(rotation=45)
+    # ax.legend(ncol=3, bbox_to_anchor=(1.0, -0.5))
+    plt.tight_layout()
+
+    if output is None:
+        plt.show()
+    else:
+        plt.savefig(output)
+
+
+def plot_locked(transactions, output=None):
+    locked_amounts, timestamps = compute_locked_amount_evolution(transactions)
+    _plot_locked(timestamps, locked_amounts, output=output)
+
+
 parser = argparse.ArgumentParser(prog="analyze-mkr-txs")
 parser.add_argument("-d", "--data-dir", default=DATA_DIR, help="data directory")
 subparsers = parser.add_subparsers(dest="command")
 
 plot_locked_parser = subparsers.add_parser("plot-locked")
 plot_locked_parser.add_argument("-o", "--output", help="output file")
+
+plot_votes_parser = subparsers.add_parser("plot-votes")
+plot_votes_parser.add_argument("-o", "--output", help="output file")
 
 
 def main():
@@ -221,6 +266,8 @@ def main():
 
     if args.command == "plot-locked":
         plot_locked(successful_transactions, args.output)
+    elif args.command == "plot-votes":
+        plot_votes_evolution(successful_transactions, args.output)
 
 
 if __name__ == "__main__":
