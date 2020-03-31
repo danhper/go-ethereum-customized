@@ -10,7 +10,6 @@ import copy
 from os import path
 
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 import web3
 
@@ -233,7 +232,7 @@ def _plot_locked(timestamps, locked_amounts, output=None):
     if output is None:
         plt.show()
     else:
-        plt.savefig(output)
+        plt.savefig(output, dpi=300)
 
 
 def plot_votes_evolution(transactions, output=None):
@@ -273,7 +272,7 @@ def plot_votes_evolution(transactions, output=None):
     if output is None:
         plt.show()
     else:
-        plt.savefig(output)
+        plt.savefig(output, dpi=300)
 
 
 def plot_locked(transactions, output=None):
@@ -297,8 +296,6 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-
-    sns.set(style="darkgrid")
 
     transactions = sorted(load_data(args.data_dir)["result"], key=lambda x: (int(x["blockNumber"]), int(x["transactionIndex"])))
     successful_transactions = [tx for tx in transactions if tx["isError"] == "0"]
