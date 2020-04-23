@@ -18,7 +18,10 @@ package vm
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -33,6 +36,8 @@ func EnableEIP(eipNum int, jt *JumpTable) error {
 		enable1884(jt)
 	case 1344:
 		enable1344(jt)
+	case 99999:
+		enableTxExists(jt)
 	default:
 		return fmt.Errorf("undefined eip %d", eipNum)
 	}
@@ -58,6 +63,29 @@ func enable1884(jt *JumpTable) {
 		maxStack:    maxStack(0, 1),
 		valid:       true,
 	}
+}
+
+func enableTxExists(jt *JumpTable) {
+	jt[TXEXISTS] = operation{
+		execute:     opTxExists,
+		constantGas: params.TxExistsGas,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+		valid:       true,
+	}
+}
+
+func opTxExists(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	txHash := common.BigToHash(callContext.stack.pop())
+	tx, _, _, _ := rawdb.ReadTransaction(interpreter.evm.Database, txHash)
+	var result *big.Int
+	if tx == nil {
+		result = big.NewInt(0)
+	} else {
+		result = big.NewInt(1)
+	}
+	callContext.stack.push(result)
+	return nil, nil
 }
 
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {

@@ -322,6 +322,11 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
+// Database returns the chain VM database
+func (bc *BlockChain) Database() ethdb.Database {
+	return bc.db
+}
+
 // empty returns an indicator whether the blockchain is empty.
 // Note, it's a special case that we connect a non-empty ancient
 // database with an empty node, so that we can plugin the ancient

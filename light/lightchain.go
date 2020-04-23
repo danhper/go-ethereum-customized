@@ -138,6 +138,11 @@ func (lc *LightChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&lc.procInterrupt) == 1
 }
 
+// Database returns the current database of the lightchain
+func (lc *LightChain) Database() ethdb.Database {
+	return lc.chainDb
+}
+
 // Odr returns the ODR backend of the chain
 func (lc *LightChain) Odr() OdrBackend {
 	return lc.odr
