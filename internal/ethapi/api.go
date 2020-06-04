@@ -1027,6 +1027,7 @@ type ExecutionResult struct {
 	Gas         uint64         `json:"gas"`
 	Failed      bool           `json:"failed"`
 	ReturnValue string         `json:"returnValue"`
+	Truncated   bool           `json:"truncated"`
 	StructLogs  []StructLogRes `json:"structLogs"`
 }
 

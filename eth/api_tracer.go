@@ -60,6 +60,7 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
+	Maxlogs *int
 }
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
@@ -765,11 +766,18 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	// Depending on the tracer type, format and return the output
 	switch tracer := tracer.(type) {
 	case *vm.StructLogger:
+		logs := tracer.StructLogs()
+		truncated := false
+		if config.Maxlogs != nil && len(logs) > *config.Maxlogs {
+			logs = logs[0:*config.Maxlogs]
+			truncated = true
+		}
 		return &ethapi.ExecutionResult{
 			Gas:         result.UsedGas,
 			Failed:      result.Failed(),
+			Truncated:   truncated,
 			ReturnValue: fmt.Sprintf("%x", result.Return()),
-			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+			StructLogs:  ethapi.FormatLogs(logs),
 		}, nil
 
 	case *tracers.Tracer:
