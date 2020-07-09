@@ -1,8 +1,15 @@
 package alerter
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/ethdb"
+)
+
+var (
+	DestinationsKey []byte = []byte("geth-alerter-destinations")
 )
 
 // EmailConfig holds the configuration necessary to send emails
@@ -24,19 +31,39 @@ type Config struct {
 type Alerter struct {
 	config       *Config
 	destinations map[string]Sender
+	db           ethdb.Database
 }
 
 // NewAlerter creates a new Alerter
-func NewAlerter(config *Config) *Alerter {
+func NewAlerter(config *Config, db ethdb.Database) *Alerter {
 	return &Alerter{
 		config:       config,
 		destinations: make(map[string]Sender),
+		db:           db,
 	}
+}
+
+func (a *Alerter) loadDestinations() (destinations []string) {
+	result, err := a.db.Get(DestinationsKey)
+	if err != nil {
+		return
+	}
+	json.Unmarshal(result, &destinations)
+	return
+}
+
+func (a *Alerter) persistDestination(destination string) error {
+	destinations := a.loadDestinations()
+	destinations = append(destinations, destination)
+	toWrite, err := json.Marshal(destinations)
+	if err != nil {
+		return err
+	}
+	return a.db.Put(DestinationsKey, toWrite)
 }
 
 // RegisterDestination registers a new destination to which to send
 // the alert when one is triggered
-// TODO: use persistent storage
 func (a *Alerter) RegisterDestination(destination string) (bool, error) {
 	if _, ok := a.destinations[destination]; ok {
 		return false, nil
@@ -49,7 +76,8 @@ func (a *Alerter) RegisterDestination(destination string) (bool, error) {
 		return false, fmt.Errorf("unknown transport type %s", transport)
 	}
 	a.destinations[destination] = senderFactory(endpoint, a.config)
-	return true, nil
+	err := a.persistDestination(destination)
+	return true, err
 }
 
 // ListDestinations returns the list of registered destination
