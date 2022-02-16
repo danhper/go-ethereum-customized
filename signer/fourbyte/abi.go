@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -75,42 +74,159 @@ func verifySelector(selector string, calldata []byte) (*decodedCallData, error) 
 	return parseCallData(calldata, string(abidata))
 }
 
-// selectorRegexp is used to validate that a 4byte database selector corresponds
-// to a valid ABI function declaration.
-//
-// Note, although uppercase letters are not part of the ABI spec, this regexp
-// still accepts it as the general format is valid. It will be rejected later
-// by the type checker.
-var selectorRegexp = regexp.MustCompile(`^([^\)]+)\(([A-Za-z0-9,\[\]]*)\)`)
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func isIdentifierSymbol(c byte) bool {
+	return c == '$' || c == '_'
+}
+
+func parseToken(unescapedSelector string, isIdent bool) (string, string, error) {
+	if len(unescapedSelector) == 0 {
+		return "", "", fmt.Errorf("empty token")
+	}
+	firstChar := unescapedSelector[0]
+	position := 1
+	if !(isAlpha(firstChar) || (isIdent && isIdentifierSymbol(firstChar))) {
+		return "", "", fmt.Errorf("invalid token start: %c", firstChar)
+	}
+	for position < len(unescapedSelector) {
+		char := unescapedSelector[position]
+		if !(isAlpha(char) || isDigit(char) || (isIdent && isIdentifierSymbol(char))) {
+			break
+		}
+		position++
+	}
+	return unescapedSelector[:position], unescapedSelector[position:], nil
+}
+
+func parseIdentifier(unescapedSelector string) (string, string, error) {
+	return parseToken(unescapedSelector, true)
+}
+
+func parseElementaryType(unescapedSelector string) (string, string, error) {
+	parsedType, rest, err := parseToken(unescapedSelector, false)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse elementary type: %v", err)
+	}
+	// handle arrays
+	for len(rest) > 0 && rest[0] == '[' {
+		parsedType = parsedType + string(rest[0])
+		rest = rest[1:]
+		for len(rest) > 0 && isDigit(rest[0]) {
+			parsedType = parsedType + string(rest[0])
+			rest = rest[1:]
+		}
+		if len(rest) == 0 || rest[0] != ']' {
+			return "", "", fmt.Errorf("failed to parse array: expected ']', got %c", unescapedSelector[0])
+		}
+		parsedType = parsedType + string(rest[0])
+		rest = rest[1:]
+	}
+	return parsedType, rest, nil
+}
+
+func parseCompositeType(unescapedSelector string) ([]interface{}, string, error) {
+	if len(unescapedSelector) == 0 || unescapedSelector[0] != '(' {
+		return nil, "", fmt.Errorf("expected '(', got %c", unescapedSelector[0])
+	}
+	parsedType, rest, err := parseType(unescapedSelector[1:])
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse type: %v", err)
+	}
+	result := []interface{}{parsedType}
+	for len(rest) > 0 && rest[0] != ')' {
+		parsedType, rest, err = parseType(rest[1:])
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to parse type: %v", err)
+		}
+		result = append(result, parsedType)
+	}
+	if len(rest) == 0 || rest[0] != ')' {
+		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
+	}
+	return result, rest[1:], nil
+}
+
+func parseType(unescapedSelector string) (interface{}, string, error) {
+	if len(unescapedSelector) == 0 {
+		return nil, "", fmt.Errorf("empty type")
+	}
+	if unescapedSelector[0] == '(' {
+		return parseCompositeType(unescapedSelector)
+	} else {
+		return parseElementaryType(unescapedSelector)
+	}
+}
 
 // parseSelector converts a method selector into an ABI JSON spec. The returned
 // data is a valid JSON string which can be consumed by the standard abi package.
+// Note, although uppercase letters are not part of the ABI spec, this function
+// still accepts it as the general format is valid. It will be rejected later
+// by the type checker.
 func parseSelector(unescapedSelector string) ([]byte, error) {
 	// Define a tiny fake ABI struct for JSON marshalling
 	type fakeArg struct {
-		Type string `json:"type"`
+		Name       string    `json:"name"`
+		Type       string    `json:"type"`
+		Components []fakeArg `json:"components"`
 	}
 	type fakeABI struct {
 		Name   string    `json:"name"`
 		Type   string    `json:"type"`
 		Inputs []fakeArg `json:"inputs"`
 	}
-	// Validate the unescapedSelector and extract it's components
-	groups := selectorRegexp.FindStringSubmatch(unescapedSelector)
-	if len(groups) != 3 {
-		return nil, fmt.Errorf("invalid selector %q (%v matches)", unescapedSelector, len(groups))
-	}
-	name := groups[1]
-	args := groups[2]
 
-	// Reassemble the fake ABI and constuct the JSON
-	arguments := make([]fakeArg, 0)
-	if len(args) > 0 {
-		for _, arg := range strings.Split(args, ",") {
-			arguments = append(arguments, fakeArg{arg})
+	name, rest, err := parseIdentifier(unescapedSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse selector '%s': %v", unescapedSelector, err)
+	}
+	args := []interface{}{}
+	if len(rest) >= 2 && rest[0] == '(' && rest[1] == ')' {
+		rest = rest[2:]
+	} else {
+		args, rest, err = parseCompositeType(rest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse selector '%s': %v", unescapedSelector, err)
 		}
 	}
-	return json.Marshal([]fakeABI{{name, "function", arguments}})
+	if len(rest) > 0 {
+		return nil, fmt.Errorf("failed to parse selector '%s': unexpected string '%s'", unescapedSelector, rest)
+	}
+
+	var assembleArgs func([]interface{}) ([]fakeArg, error)
+	assembleArgs = func(args []interface{}) ([]fakeArg, error) {
+		arguments := make([]fakeArg, 0)
+		for i, arg := range args {
+			// generate dummy name to avoid unmarshal issues
+			name := fmt.Sprintf("name%d", i)
+			if s, ok := arg.(string); ok {
+				arguments = append(arguments, fakeArg{name, s, nil})
+			} else if components, ok := arg.([]interface{}); ok {
+				subArgs, err := assembleArgs(components)
+				if err != nil {
+					return nil, fmt.Errorf("failed to assemble components: %v", err)
+				}
+				arguments = append(arguments, fakeArg{name, "tuple", subArgs})
+			} else {
+				return nil, fmt.Errorf("failed to assemble args: unexpected type %T", arg)
+			}
+		}
+		return arguments, nil
+	}
+
+	// Reassemble the fake ABI and constuct the JSON
+	fakeArgs, err := assembleArgs(args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse selector: %v", err)
+	}
+
+	return json.Marshal([]fakeABI{{name, "function", fakeArgs}})
 }
 
 // parseCallData matches the provided call data against the ABI definition and

@@ -17,6 +17,8 @@
 package fourbyte
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -169,6 +171,54 @@ func TestMaliciousABIStrings(t *testing.T) {
 		_, err := verifySelector(tt, data)
 		if err == nil {
 			t.Errorf("test %d: expected error for selector '%v'", i, tt)
+		}
+	}
+}
+
+func TestParseSelector(t *testing.T) {
+	mkType := func(types ...interface{}) []interface{} {
+		var result []interface{}
+		for i, typeOrComponents := range types {
+			name := fmt.Sprintf("name%d", i)
+			if typeName, ok := typeOrComponents.(string); ok {
+				result = append(result, map[string]interface{}{"name": name, "type": typeName, "components": nil})
+			} else {
+				result = append(result, map[string]interface{}{"name": name, "type": "tuple", "components": typeOrComponents})
+			}
+		}
+		return result
+	}
+	tests := []struct {
+		input string
+		name  string
+		args  []interface{}
+	}{
+		{"noargs()", "noargs", []interface{}{}},
+		{"simple(uint256,uint256,uint256)", "simple", mkType("uint256", "uint256", "uint256")},
+		{"other(uint256,address)", "other", mkType("uint256", "address")},
+		{"withArray(uint256[],address[2],uint8[4][][5])", "withArray", mkType("uint256[]", "address[2]", "uint8[4][][5]")},
+		{"singleNest(bytes32,uint8,(uint256,uint256),address)", "singleNest", mkType("bytes32", "uint8", mkType("uint256", "uint256"), "address")},
+		{"multiNest(address,(uint256[],uint256),((address,bytes32),uint256))", "multiNest",
+			mkType("address", mkType("uint256[]", "uint256"), mkType(mkType("address", "bytes32"), "uint256"))},
+	}
+	var parsed []map[string]interface{}
+	for i, tt := range tests {
+		encoded, err := parseSelector(tt.input)
+		if err != nil {
+			t.Errorf("test %d: failed to parse selector '%v': %v", i, tt.input, err)
+		}
+		err = json.Unmarshal(encoded, &parsed)
+		if err != nil || len(parsed) != 1 {
+			t.Errorf("test %d: failed to decode selector '%v' ('%v'): %v", i, tt.input, encoded, err)
+		}
+		abiFunc := parsed[0]
+		if name, ok := abiFunc["name"]; !ok || name != tt.name {
+			t.Errorf("test %d: unexpected function name: '%s' != '%s'", i, name, tt.name)
+		}
+
+		inputs := abiFunc["inputs"].([]interface{})
+		if !reflect.DeepEqual(inputs, tt.args) {
+			t.Errorf("test %d: unexpected args: '%v' != '%v'", i, inputs, tt.args)
 		}
 	}
 }
